@@ -22,15 +22,18 @@ class WPThumb_Picture {
 	// Array of all the different images used to build the picture element.
 	private $images = array();
 
-	public $multiplier = 2;
+	// Retina Multiplier. Usually 2x. Could use 1x or 1.5x if you like.
+	public $high_res_multiplier = 2;
 
 	public function __construct( $attr = array() ) {
 
-		$attr = wp_parse_args( $attr, array(
-			'class' => ''
-		) );
+		$this->attr = wp_parse_args(
+			$attr,
+			array(
+				'class' => ''
+			)
+		);
 
-		$this->attr = $attr;
 	}
 
 	/**
@@ -51,62 +54,36 @@ class WPThumb_Picture {
 	}
 
 	/**
-	 * Get the alt attribute value.
-	 * @return [type] [description]
+	 * Get the picture element HTML
 	 */
-	public function get_alt() {
-
-		$default = $this->get_default_image();
-		return trim( strip_tags( get_post_meta( $default['attachment_id'], '_wp_attachment_image_alt', true ) ) );
-
-	}
-
-
-	/**
-	 * Get the default picture source image. Used for default/fallback when picture is not supported.
-	 * Defaults to the first.
-	 *
-	 * @return string the def
-	 */
-	public function get_default_image() {
-
-		if ( ! $this->default )
-			$this->default = reset( $this->images );
-
-		return $this->default;
-
-	}
-
-
 	public function get_picture() {
 
 		if ( empty( $this->images ) )
 			return;
 
-		$default = $this->get_default_image();
-
-		$picture = sprintf(
-			"\n<span data-picture data-alt=\"%s\" class=\"%s\">\n",
-			esc_attr( $this->get_alt() ),
+		$output = sprintf(
+			"\n<picture class=\"%s\">\n",
 			implode( ' ', array_map( 'sanitize_html_class', explode( ' ', $this->attr['class'] ) ) )
 		);
 
+		$output .= "\t<!--[if IE 9]><video style=\"display: none;\"><![endif]-->\n";
+
 		foreach ( $this->images as $image )
-			$picture .= $this->get_picture_source( $image );
+			$output .= $this->get_picture_source( $image );
 
-		$picture .= sprintf(
-			"\t<noscript>%s</noscript>\n",
-			wp_get_attachment_image( $default['attachment_id'], $default['size'] )
-		);
+		$output .= "\t<!--[if IE 9]></video><![endif]-->\n";
 
-		$picture .= '</span>';
+		$default = reset( $this->images );
+		$output .= "\t" . wp_get_attachment_image( $default['attachment_id'], $default['size'] ) . "\n";
 
-		return $picture;
+		$output .= '</picture>';
+
+		return $output;
 
 	}
 
 	/**
-	 * Get the source element for each image.
+	 * Get the source element for a single image.
 	 *
 	 * @param  [type] $image [description]
 	 * @return [type]        [description]
@@ -114,7 +91,6 @@ class WPThumb_Picture {
 	private function get_picture_source( $image ) {
 
 		$image_defaults = array(
-			//'attachment_id' => (int),
 			'size' => 'thumbnail',
 			'media_query' => null
 		);
@@ -122,33 +98,35 @@ class WPThumb_Picture {
 		$image = wp_parse_args( $image, $image_defaults );
 
 		// The source element for the requested image
-		$requested = wp_get_attachment_image_src( $image['attachment_id'], $image['size'] );
+		$requested  = wp_get_attachment_image_src( $image['attachment_id'], $image['size'] );
 		$data_media = esc_attr( $this->get_picture_source_media_attr( $image['media_query'] ) );
 
-		$r = sprintf(
-			"\t<span data-src=\"%s\" %s></span>\n",
+		$output = sprintf(
+			"\t<source srcset=\"%s\" %s></span>\n",
 			esc_attr( $requested[0] ),
-			! empty( $data_media ) ? sprintf( 'data-media="%s"', esc_attr( $data_media ) ) : null
+			! empty( $data_media ) ? sprintf( 'media="%s"', esc_attr( $data_media ) ) : null
 		);
 
 		// The source element for the high res version of the requested image.
-		// Calculate the size args for the high resoloution image & If possible to create high res version.
 		$original = wp_get_attachment_image_src( $image['attachment_id'], 'full' );
 
+		// Calculate the size args for the high resoloution image
 		$size_high_res = array(
-			0      => (int) $requested[1] * $this->multiplier,
-			1      => (int) $requested[2] * $this->multiplier,
+			0      => (int) $requested[1] * $this->high_res_multiplier,
+			1      => (int) $requested[2] * $this->high_res_multiplier,
 			'crop' => $requested[3]
 		);
 
+		// If the original image is at least as large as the high res version,
+		// add a picture source for a high res version
 		if ( $original[1] >= $size_high_res[0] && $original[2] >= $size_high_res[1] ) {
 
 			$requested_high_res = wp_get_attachment_image_src( $image['attachment_id'], $size_high_res );
 			$data_media = esc_attr( $this->get_picture_source_media_attr( $image['media_query'], true ) );
-			$r .= sprintf(
-				"\t<span data-src=\"%s\" %s></span>\n",
+			$output .= sprintf(
+				"\t<source srcset=\"%s\" %s></span>\n",
 				esc_attr( $requested_high_res[0] ),
-				! empty( $data_media ) ? sprintf( 'data-media="%s"', esc_attr( $data_media ) ) : null
+				! empty( $data_media ) ? sprintf( 'media="%s"', esc_attr( $data_media ) ) : null
 			);
 
 		}
@@ -158,22 +136,23 @@ class WPThumb_Picture {
 	}
 
 	/**
-	 * Process the media attribute value. Adds retina args if required.
+	 * Process the media attribute value. Adds high-res args if required.
 	 *
 	 * @param  string  $media_query media query. Currently only supports a single query. ('and' is ok, but ',' is not)
-	 * @param  boolean $retina      If this is for a high res image source, pass true to append the high res media query args.
+	 * @param  boolean $high_res      If this is for a high res image source, pass true to append the high res media query args.
 	 * @return string               full string to add as data-media attribute.
 	 */
 	private function get_picture_source_media_attr( $media_query, $high_res = false ) {
 
-		if ( $high_res )
-			if ( empty( $media_query ) )
-				return "(min-device-pixel-ratio: $this->multiplier), (-webkit-min-device-pixel-ratio: $this->multiplier)";
-			else
-				return "$media_query and (min-device-pixel-ratio: $this->multiplier), $media_query and (-webkit-min-device-pixel-ratio: $this->multiplier)";
-
-		else
+		if ( $high_res ) {
+			if ( empty( $media_query ) ) {
+				return "(min-device-pixel-ratio: $this->high_res_multiplier), (-webkit-min-device-pixel-ratio: $this->high_res_multiplier)";
+			} else {
+				return "$media_query and (min-device-pixel-ratio: $this->high_res_multiplier), $media_query and (-webkit-min-device-pixel-ratio: $this->high_res_multiplier)";
+			}
+		} else {
 			return $media_query;
+		}
 
 	}
 
@@ -184,8 +163,11 @@ class WPThumb_Picture {
  */
 add_action( 'wp_enqueue_scripts', function() {
 
-	wp_enqueue_script( 'wppf_matchmedia', trailingslashit( WPPF_URL ) . 'picturefill/external/matchmedia.js', false, false, true );
-	wp_enqueue_script( 'wppf_picturefill', trailingslashit( WPPF_URL ) . 'picturefill/picturefill.js', array('wppf_matchmedia' ), false, true );
+	add_action( 'wp_head', function() {
+		echo '<script>document.createElement( "picture" );</script>';
+	}, 1 );
+
+	wp_enqueue_script( 'wppf_picturefill', trailingslashit( WPPF_URL ) . 'js/picturefill.min.js', false, true );
 
 } );
 
@@ -199,8 +181,9 @@ function wpthumb_get_picture( $images, $attr = array() ) {
 
 	$picture = new WPThumb_Picture( $attr );
 
-	foreach ( $images as $image )
+	foreach ( $images as $image ) {
 		$picture->add_picture_source( $image['attachment_id'], $image['size'], $image['media_query'] );
+	}
 
 	return $picture->get_picture();
 
