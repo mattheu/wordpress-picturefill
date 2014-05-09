@@ -30,7 +30,7 @@ class WPThumb_Picture {
 		$this->attr = wp_parse_args(
 			$attr,
 			array(
-				'class' => ''
+				'class' => '',
 			)
 		);
 
@@ -73,10 +73,23 @@ class WPThumb_Picture {
 
 		$output .= "\t<!--[if IE 9]></video><![endif]-->\n";
 
-		// Set a default image.
 		$default       = reset( $this->images );
-		$default_image = wp_get_attachment_image_src( $default['attachment_id'], $default['size'] );
-		$output .= "\t<img src=\"$default_image[0]\" />\n";
+		$args          = array();
+		$default_image = wp_get_attachment_image( $default['attachment_id'], $default['size'], false, $this->attr );
+
+		// Use DOM Document to strip width/height from image.
+		$dom = new DOMDocument;
+		$dom->loadHTML( $default_image );
+
+		foreach ( array( 'width', 'height', 'class' ) as $attr ) {
+			$xpath = new DOMXPath( $dom );            // create a new XPath
+			$nodes = $xpath->query('//*[@' . $attr . ']');  // Find elements with a style attribute
+			foreach ($nodes as $node) {              // Iterate over found elements
+				$node->removeAttribute( $attr );    // Remove style attribute
+			}
+		}
+
+		$output .= "\t" . $dom->saveHTML() . "\n";
 
 		$output .= '</picture>';
 
