@@ -73,8 +73,10 @@ class WPThumb_Picture {
 
 		$output .= "\t<!--[if IE 9]></video><![endif]-->\n";
 
-		$default = reset( $this->images );
-		$output .= "\t" . wp_get_attachment_image( $default['attachment_id'], $default['size'] ) . "\n";
+		// Set a default image.
+		$default       = reset( $this->images );
+		$default_image = wp_get_attachment_image_src( $default['attachment_id'], $default['size'] );
+		$output .= "\t<img src=\"$default_image[0]\" />\n";
 
 		$output .= '</picture>';
 
