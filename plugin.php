@@ -73,23 +73,7 @@ class WPThumb_Picture {
 
 		$output .= "\t<!--[if IE 9]></video><![endif]-->\n";
 
-		$default       = reset( $this->images );
-		$args          = array();
-		$default_image = wp_get_attachment_image( $default['attachment_id'], $default['size'], false, $this->attr );
-
-		// Use DOM Document to strip width/height from image.
-		$dom = new DOMDocument;
-		$dom->loadHTML( $default_image );
-
-		foreach ( array( 'width', 'height', 'class' ) as $attr ) {
-			$xpath = new DOMXPath( $dom );            // create a new XPath
-			$nodes = $xpath->query('//*[@' . $attr . ']');  // Find elements with a style attribute
-			foreach ($nodes as $node) {              // Iterate over found elements
-				$node->removeAttribute( $attr );    // Remove style attribute
-			}
-		}
-
-		$output .= "\t" . $dom->saveHTML() . "\n";
+		$output .= "\t" . $this->get_default_image() . "\n";
 
 		$output .= '</picture>';
 
@@ -171,6 +155,31 @@ class WPThumb_Picture {
 
 	}
 
+	public function get_default_image() {
+
+		$default       = reset( $this->images );
+		$attr          = array();
+
+		if ( isset( $this->attr['alt'] ) )
+			$attr['alt'] = $this->attr['alt'];
+
+		$default_image = wp_get_attachment_image( $default['attachment_id'], $default['size'], false, $attr );
+
+		// Use DOM Document to strip width/height from image.
+		$dom = new DOMDocument;
+		$dom->loadHTML( $default_image );
+
+		foreach ( array( 'width', 'height', 'class' ) as $attr ) {
+			$xpath = new DOMXPath( $dom );            // create a new XPath
+			$nodes = $xpath->query('//*[@' . $attr . ']');  // Find elements with a style attribute
+			foreach ($nodes as $node) {              // Iterate over found elements
+				$node->removeAttribute( $attr );    // Remove style attribute
+			}
+		}
+
+		return $dom->saveHTML();
+
+	}
 }
 
 /**
