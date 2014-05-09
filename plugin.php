@@ -177,7 +177,7 @@ class WPThumb_Picture {
 			}
 		}
 
-		return $dom->saveHTML();
+		return $dom->saveXML( $dom->getElementsByTagName('img')->item(0) );
 
 	}
 }
