@@ -131,7 +131,7 @@ class WPThumb_Picture {
 
 		}
 
-		return $r;
+		return $output;
 
 	}
 
