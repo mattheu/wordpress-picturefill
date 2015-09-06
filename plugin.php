@@ -8,6 +8,7 @@ Version: 1.0
 Author URI: http://matth.eu
 */
 
+
 define( 'WPPF_PATH', untrailingslashit( plugin_dir_path( __FILE__ ) ) );
 define( 'WPPF_URL', plugin_dir_url( __FILE__ ) );
 
@@ -68,8 +69,9 @@ class WPThumb_Picture {
 
 		$output .= "\t<!--[if IE 9]><video style=\"display: none;\"><![endif]-->\n";
 
-		foreach ( $this->images as $image )
+		foreach ( $this->images as $image ) {
 			$output .= $this->get_picture_source( $image );
+		}
 
 		$output .= "\t<!--[if IE 9]></video><![endif]-->\n";
 
@@ -84,8 +86,8 @@ class WPThumb_Picture {
 	/**
 	 * Get the source element for a single image.
 	 *
-	 * @param  [type] $image [description]
-	 * @return [type]        [description]
+	 * @param  array $image
+	 * @return string
 	 */
 	private function get_picture_source( $image ) {
 
@@ -97,14 +99,8 @@ class WPThumb_Picture {
 		$image = wp_parse_args( $image, $image_defaults );
 
 		// The source element for the requested image
-		$requested  = wp_get_attachment_image_src( $image['attachment_id'], $image['size'] );
-		$data_media = esc_attr( $this->get_picture_source_media_attr( $image['media_query'] ) );
-
-		$output = sprintf(
-			"\t<source srcset=\"%s\" %s></span>\n",
-			esc_attr( $requested[0] ),
-			! empty( $data_media ) ? sprintf( 'media="%s"', esc_attr( $data_media ) ) : null
-		);
+		$requested = wp_get_attachment_image_src( $image['attachment_id'], $image['size'] );
+		$srcset    = sprintf( '%s %dx', $requested[0], 1 );
 
 		// The source element for the high res version of the requested image.
 		$original = wp_get_attachment_image_src( $image['attachment_id'], 'full' );
@@ -117,41 +113,19 @@ class WPThumb_Picture {
 		);
 
 		// If the original image is at least as large as the high res version,
-		// add a picture source for a high res version
+		// add an srcset for a high res version
 		if ( $original[1] >= $size_high_res[0] && $original[2] >= $size_high_res[1] ) {
-
 			$requested_high_res = wp_get_attachment_image_src( $image['attachment_id'], $size_high_res );
-			$data_media = esc_attr( $this->get_picture_source_media_attr( $image['media_query'], true ) );
-			$output .= sprintf(
-				"\t<source srcset=\"%s\" %s></span>\n",
-				esc_attr( $requested_high_res[0] ),
-				! empty( $data_media ) ? sprintf( 'media="%s"', esc_attr( $data_media ) ) : null
-			);
-
+			$srcset .= sprintf( ', %s %dx', $requested_high_res[0], $this->high_res_multiplier );
 		}
+
+		$output = sprintf(
+			"\t<source srcset=\"%s\" %s></span>\n",
+			esc_attr( $srcset ),
+			! empty( $image['media_query'] ) ? sprintf( 'media="%s"', esc_attr( $image['media_query'] ) ) : null
+		);
 
 		return $output;
-
-	}
-
-	/**
-	 * Process the media attribute value. Adds high-res args if required.
-	 *
-	 * @param  string  $media_query media query. Currently only supports a single query. ('and' is ok, but ',' is not)
-	 * @param  boolean $high_res      If this is for a high res image source, pass true to append the high res media query args.
-	 * @return string               full string to add as data-media attribute.
-	 */
-	private function get_picture_source_media_attr( $media_query, $high_res = false ) {
-
-		if ( $high_res ) {
-			if ( empty( $media_query ) ) {
-				return "(min-device-pixel-ratio: $this->high_res_multiplier), (-webkit-min-device-pixel-ratio: $this->high_res_multiplier)";
-			} else {
-				return "$media_query and (min-device-pixel-ratio: $this->high_res_multiplier), $media_query and (-webkit-min-device-pixel-ratio: $this->high_res_multiplier)";
-			}
-		} else {
-			return $media_query;
-		}
 
 	}
 
@@ -186,14 +160,12 @@ class WPThumb_Picture {
  *	Enqueue the picturefill scripts
  */
 add_action( 'wp_enqueue_scripts', function() {
-
-	add_action( 'wp_head', function() {
-		echo '<script>document.createElement( "picture" );</script>';
-	}, 1 );
-
-	wp_enqueue_script( 'wppf_picturefill', trailingslashit( WPPF_URL ) . 'js/picturefill.min.js', false, true );
-
+	wp_enqueue_script( 'wppf_picturefill', trailingslashit( WPPF_URL ) . 'js/picturefill.min.js' );
 } );
+
+add_action( 'wp_head', function() {
+	echo "\n<script>document.createElement( \"picture\" );</script>\n\n";
+}, 1 );
 
 /**
  * Returns a picture element for the passed args.
